@@ -1,23 +1,34 @@
-Code for training and hosting a large language model.
+Code for training and hosting a large language model. Check out the UI [here](https://www.landoncummings.com/LandonGPT).
 
 This version is using the Llama 3.2  3 Billion parameter instruct model.
 
 ## Data preperation
 The first step of this is preparing the data. For me I used my iMessage data. To extract all the raw iMessage data I first used my [iMessage analysis app](https://github.com/landonWcummings/imessageanalysisapp). One of the byproducts of making the macOS app was extracting all my iMessage data and formatting it cleanly. After running the app I had all the raw data cleanly made in Documents>ImessageAnalysisApp>processed_messages.csv  
 From here I ran the dataprocess.py file to filter it and organize it into the jsonl file format. There are a few notable and adjustable features of this dataprocess program. 
+
 1 - It only looks at all messages after January 1, 2023. I want the model to mimic my modern self, not my middle school self.
+
 2 - It only looks at direct messages (no group chats included). While there is good data in group chats it would be very hard to use other conversations as input cotext. DMs are much easier as very direct input:output conversationally.
+
 3 - I only used conversation data from my 20 most contacted contacts. I did this in order to better mimic how I text with my close friends
+
 4 - Converted all text to lowercase. My capitilization when texting is strange (if I even capitalize stuff at all) and there is no apparent pattern so capitilization would just confuse the model
+
 5 - Remove all images completely and replaced links with "link". You can't pass images to this LLM and also long URLs would not help the model at all and could confuse it
+
 6 - Removed all repetitive and spammy text. Any time there were more than 3 characters in a row I truncated it to just 3 characters. For example, "oooooooooh" -> "oooh"
+
 7 - Removed all iMessage reactions. For example, '{contact} laughed at "random text"' got removed
+
 8 - Removed all emojis. I trained 8+ models trying to get this to work but ultimately this model wasn't smart/large enough to use them intelligently
+
 9 - Combined all consecutive messages sent by a contact or yourself. Seperated these messages with "|" symbol. For example, if I sent "Haha" followed by "that is amazing" it would now become "Haha | that is amazing"
+
 10 - If one of my contacts sent me message(s) and I replied within 30 minutes it was properly formatted to jsonl. For example, if John sent me "Want to grab dinner tonight?" and I responded with "Yeah | Bartaco?" then it would turn into
 { "input": "Want to grab dinner tonight?", "output": "Yeah | Bartaco?" }
 
 Finally, I wanted to include some information about myself so I had chatGPT generate 80 synthetic conversation style jsonl that used this data
+
 knowyourself = {
    "height": "5 feet 10 inches",
    "age" : "omitted for privacy",
@@ -29,6 +40,7 @@ knowyourself = {
    "school" : "omitted for privacy",
    "hometown" : "atlanta, georgia"
 }
+
 I passed these 80 synthetic conversation facts about me 7+ times into the dataset so it could actually learn it
 
 
@@ -42,12 +54,15 @@ I also had a lot of trouble with my finishing token. For some reason or another 
 
 ## Inference
 This uses flask to create a api and ngrok to make it easily publicly available to the web. This is the link if you want to call requests to the model independently https://aeed-64-149-153-183.ngrok-free.app  -note just visiting this site doesn't work and you have to do a command line prompt like :
+
 windows:
+
 curl -X POST "https://aeed-64-149-153-183.ngrok-free.app/generate" ^
 -H "Content-Type: application/json" ^
 -d "{\"text\": \"tell me who you are?\"}"
 
 mac:
+
 curl -X POST "https://aeed-64-149-153-183.ngrok-free.app/generate" \
 -H "Content-Type: application/json" \
 -d '{"text": "hello, how are you?"}'
