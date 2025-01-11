@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import time
 import torch
 from transformers import (
@@ -22,11 +20,16 @@ from torch.distributed.fsdp.fully_sharded_data_parallel import (
 )
 from huggingface_hub import login
 from datasets import load_dataset
+from transformers import DefaultDataCollator
+
+data_collator = DefaultDataCollator(return_tensors="pt")
+
 
 # Custom prompt tokens (optional)
 INPUT_TOKEN = "<<INPUT>>"
 OUTPUT_TOKEN = "<<OUTPUT>>"
-END_TOKEN = "<<END>>"
+END_TOKEN = "<eos>"
+
 
 def print_trainable_parameters(model):
     """
@@ -44,46 +47,48 @@ def print_trainable_parameters(model):
         f"trainable%: {100 * trainable_params / all_param}"
     )
 
-def generate_and_tokenize_prompt(example, tokenizer, max_length=512):
+def generate_and_tokenize_prompt(example, tokenizer, max_length=512, verbose=False):
     """
-    Given a data example with 'input' and 'output', produce a
-    prompt and tokenize it. Only the assistant's portion is labeled.
+    Tokenizes the input-output pair. 
+    Now we remove the <<END>> from the final text, letting default eos token do the job.
     """
-    # Construct the text prompt
     text_prompt = (
         f"{INPUT_TOKEN} {example['input']} "
-        f"{OUTPUT_TOKEN} {example['output']} {END_TOKEN}"
+        f"{OUTPUT_TOKEN} {example['output']} DONE {tokenizer.eos_token}"
+        # We do NOT add custom END_TOKEN here 
     )
-    
-    # Tokenize the prompt
+
+    # Tokenize without padding
     tokens = tokenizer(
         text_prompt,
         truncation=True,
         max_length=max_length,
-        padding="max_length",
+        padding="do_not_pad",
     )
 
-    # Identify where the assistant output starts
+    # The user portion length (so we mask out the user portion in the loss)
     user_part_len = len(tokenizer(f"{INPUT_TOKEN} {example['input']} ")["input_ids"])
-    
-    # Initialize labels to -100 so that the user input part is not included in the loss
+
     labels = [-100] * len(tokens["input_ids"])
-    
-    # Only label the assistant's portion (from user_part_len onward)
     for i in range(user_part_len, len(tokens["input_ids"])):
         labels[i] = tokens["input_ids"][i]
 
     tokens["labels"] = labels
 
-    # Print tokenization details for debugging
-    print("=== Debugging Tokenization ===")
-    print(f"Text Prompt: {text_prompt}")
-    print(f"Tokens (input IDs): {tokens['input_ids']}")
-    print(f"Labels: {tokens['labels']}")
-    #print("==============================")
+    # Turn them into tensors
+    tokens = {k: torch.tensor(v) for k, v in tokens.items()}
+    if (verbose):
+        print(tokenizer.eos_token)
+        print(tokenizer.eos_token_id)
+
+        print(f"Text: {text_prompt}")
+        print(f"labels: {labels}")
+        print(f"tokens: {tokens}")
+        print(f"Special Tokens: {tokenizer.special_tokens_map}")
+
+    
 
     return tokens
-
 
 def main(
     train_dataset_path,
@@ -94,7 +99,7 @@ def main(
     lora_r=16,
     lora_alpha=32,
     lora_dropout=0.05,
-    batch_size=2,
+    batch_size=1,
     epochs=5,
     gradient_accumulation_steps=4,
     use_bf16=True,
@@ -140,26 +145,28 @@ def main(
         padding="longest"
     )
 
-    # LLaMA token settings
+    # LLaMA defaults
     tokenizer.bos_token_id = 1
-    tokenizer.eos_token_id = 2
+    tokenizer.eos_token_id = 2  # default LLaMA end-of-sequence token
     tokenizer.pad_token_id = tokenizer.eos_token_id
     model.config.pad_token_id = tokenizer.pad_token_id
 
     # Optional: Add custom prompt tokens
+    # We omit END_TOKEN from special tokens to rely on the default LLaMA eos.
     special_tokens = {
-        'additional_special_tokens': [INPUT_TOKEN, OUTPUT_TOKEN, END_TOKEN]
+        'additional_special_tokens': [INPUT_TOKEN, OUTPUT_TOKEN],
+        'eos_token': END_TOKEN  # This ensures the EOS token is linked properly
     }
-    num_added_tokens = tokenizer.add_special_tokens(special_tokens)
+
+    tokenizer.add_special_tokens(special_tokens)
     model.resize_token_embeddings(len(tokenizer))
 
-    print("beginning tests")
+    print("Beginning tests:")
     example = {"input": "Tell me a secret.", "output": "I won’t tell you!"}
-    generate_and_tokenize_prompt(example, tokenizer, max_length=max_length)
-    print("<END>:")
-    print(tokenizer.encode(END_TOKEN))
+    generate_and_tokenize_prompt(example, tokenizer, max_length=max_length,verbose=True)
+    print("<eos token id>:", tokenizer.eos_token_id)
 
-    time.sleep(10)
+    time.sleep(5)
 
     # Map datasets with the tokenization function
     def tokenize_fn(ex):
@@ -242,10 +249,10 @@ def main(
 if __name__ == "__main__":
     main(
         train_dataset_path=r"C:\Users\lndnc\OneDrive\Desktop\AI test\landongpt\data\gpttrain.jsonl",
-        output_dir="saved-model",
+        output_dir="savedmodel",
         eval_dataset_path=None,
         base_model_id="meta-llama/Llama-3.2-3B-Instruct",
-        epochs=9,
+        epochs=3,
         gradient_accumulation_steps=2,
         huggingface_token="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"  # or "hf_yourTokenHere"
     )

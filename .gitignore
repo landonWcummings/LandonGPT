@@ -1,1 +1,5 @@
 llama_env/
+
+data/*
+
+savedmodel/
