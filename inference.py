@@ -3,11 +3,22 @@ from flask_cors import CORS
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft import PeftModel
+import threading
+import json
+from datetime import datetime
 
 # Custom prompt tokens (matching training script)
 INPUT_TOKEN = "<<INPUT>>"
 OUTPUT_TOKEN = "<<OUTPUT>>"
 END_TOKEN = "<eos>"
+
+def log_request(data):
+    try:
+        with open("requests_log.jsonl", "a") as f:
+            f.write(json.dumps(data) + "\n")
+    except Exception as e:
+        print(f"Error logging request: {e}")
+
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -111,6 +122,12 @@ def generate():
         if new_token.strip() in [END_TOKEN, tokenizer.eos_token, "DONE"]:
             break
 
+    log_data = {
+        "timestamp": datetime.now().isoformat(),
+        "input_text": user_input,
+        "output_text": generated_text.strip(),
+    }
+    threading.Thread(target=log_request, args=(log_data,)).start()
     return jsonify({"response": generated_text.strip()})
 
 

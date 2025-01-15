@@ -3,3 +3,5 @@ llama_env/
 data/*
 
 savedmodel/
+
+requests_log.jsonl

@@ -57,15 +57,24 @@ This uses flask to create a api and ngrok to make it easily publicly available t
 
 windows:
 
-curl -X POST "https://aeed-64-149-153-183.ngrok-free.app/generate" ^
+curl -X POST "https://immense-neatly-condor.ngrok-free.app/generate" ^
 -H "Content-Type: application/json" ^
--d "{\"text\": \"tell me who you are?\"}"
+-d '{
+  "text": "hello, how are you?",
+  "ID": "Landon",
+  "inference": true
+}'
 
 mac:
 
-curl -X POST "https://aeed-64-149-153-183.ngrok-free.app/generate" \
+curl -X POST "https://immense-neatly-condor.ngrok-free.app/generate" \
 -H "Content-Type: application/json" \
--d '{"text": "hello, how are you?"}'
+-d '{
+  "text": "hello, how are you?",
+  "ID": "Landon",
+  "inference": true
+}'
+
 
 If you just copy and paste these into your command prompt it call the model and you should get a response (in JSON format)
 
